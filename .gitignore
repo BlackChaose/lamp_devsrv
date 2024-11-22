@@ -1,3 +1,11 @@
 projects/*
 .env
 *~
+php.ini
+php_ext/*
+ssl/*
+apache/sites-available/*.conf
+mysql/data/*
+mysql-test/data/*
+exim4/virtual_aliases
+exim4/logs/*
