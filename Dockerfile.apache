@@ -1,0 +1,38 @@
+# Dockerfile для Apache 2.4
+FROM debian:bullseye-slim
+
+ARG GROUP_ID=501
+
+RUN groupadd wwwdev
+RUN groupmod -g $GROUP_ID wwwdev
+RUN usermod -a -G wwwdev www-data
+
+RUN apt-get update && apt-get install -y\
+    apache2\
+    curl \
+    git \
+    unzip \
+    vim\
+    iputils-ping\
+    net-tools\
+    netcat\
+    socat\
+    nmap\
+    telnet\
+    lnav
+
+RUN apache2ctl -M | grep -q rewrite_module || a2enmod rewrite
+RUN apache2ctl -M | grep -q ssl_module || a2enmod ssl
+RUN apache2ctl -M | grep -q proxy || a2enmod proxy 
+RUN apache2ctl -M | grep -q proxy_fcgi  || a2enmod proxy_fcgi
+RUN apache2ctl -M | grep -q setenvif || a2enmod setenvif
+
+COPY ./ssl/private /usr/local/apache2/conf/ssl
+
+RUN echo '#!/bin/bash' > /usr/local/bin/init.sh && \
+    echo 'rm -- "$0"' >> /usr/local/bin/init.sh && \
+    echo '/init.sh' >> /usr/local/bin/init.sh && \
+    echo 'service apache2 restart' >> /usr/local/bin/init.sh && \
+    chmod +x /usr/local/bin/init.sh
+
+EXPOSE 80 443

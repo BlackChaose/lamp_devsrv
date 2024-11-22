@@ -1,0 +1,20 @@
+	date.timezone = Europe/Moscow
+	extension_dir=/opt/php8.2/lib/php/extensions/no-debug-non-zts
+	extension=redis.so
+
+	default_charset="UTF-8"
+	display_errors=on
+	include_path=.:/opt/php8.2/lib/php
+	max_input_time=240
+	max_input_vars=10000
+	memory_limit=512M
+	post_max_size=192M
+	upload_max_filesize=192M
+
+	session.gc_maxlifetime=3600
+	
+	expose_php=off
+	session.use_strict_mode=on
+	session.cookie_httponly=on
+	session.cookie_secure=on
+	session.cookie_samesite="Strict"

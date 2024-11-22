@@ -1,0 +1,128 @@
+FROM debian:bullseye-slim
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    unzip \
+    vim\
+    wget\
+    nmap\
+    net-tools\
+    procps\
+    socat\
+    nmap\
+    netcat\
+    lnav\
+    build-essential \
+    libcurl4-openssl-dev \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    libxml2-dev \
+    libicu-dev \
+    libzip-dev \
+    libbz2-dev \
+    libonig-dev \
+    libssl-dev \
+    libsqlite3-dev \
+    zlib1g-dev \
+    pkg-config \
+    libzip-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src
+
+ENV PHP_VERSION 8.2.8
+RUN wget https://www.php.net/distributions/php-${PHP_VERSION}.tar.bz2 \
+    && tar -xjf php-${PHP_VERSION}.tar.bz2 \
+    && cd php-${PHP_VERSION}
+
+RUN cd php-${PHP_VERSION} \
+    && ./configure \
+    --prefix=/opt/php8.2 \
+    --with-config-file-path=/opt/php8.2 \
+    --with-libdir=/lib/x86_64-linux-gnu \
+    --enable-bcmath \
+    --enable-calendar \
+    --enable-fpm \
+    --enable-cgi \
+    --enable-cli \
+    --enable-ctype \
+    --enable-dom \
+    --enable-fileinfo \
+    --enable-filter \
+    --enable-gd \
+    --enable-hash \
+    --enable-intl \
+    --enable-json \
+    --enable-mbstring \
+    --enable-mysqlnd \
+    --enable-pdo \
+    --enable-phar \
+    --enable-posix \
+    --enable-session \
+    --enable-simplexml \
+    --enable-soap \
+    --enable-tokenizer \
+    --enable-xml \
+    --enable-xmlreader \
+    --enable-xmlwriter \
+    --enable-gd-native-ttf \
+    --with-curl \
+    --with-freetype \
+    --with-iconv \
+    --with-gd \
+    --with-jpeg \
+    --with-png \
+    --with-libxml \
+    --with-mysqli \
+    --with-openssl \
+    --with-pdo-mysql \
+    --with-pdo-sqlite \
+    --with-sqlite3 \
+    --with-zip \
+    --with-zlib \
+    --with-bz2 \
+    && make -j"$(nproc)" \
+    && make install
+
+RUN ln -s /opt/php8.2/bin/php /usr/bin/php \
+    && ln -s /opt/php8.2/bin/phpize /usr/bin/phpize \
+    && ln -s /opt/php8.2/bin/php-config /usr/bin/php-config \
+    && ln -s /opt/php8.2/sbin/php-fpm /usr/sbin/php-fpm
+
+RUN cp php-${PHP_VERSION}/php.ini-development /opt/php8.2/php.ini
+
+RUN cp /opt/php8.2/etc/php-fpm.conf.default /opt/php8.2/etc/php-fpm.conf \
+    && cp /opt/php8.2/etc/php-fpm.d/www.conf.default /opt/php8.2/etc/php-fpm.d/www.conf
+
+RUN mkdir -p /run/php
+
+ENV PATH="/opt/php8.2/bin:$PATH"
+
+RUN sed -i 's/;pid = run\/php-fpm.pid/pid = run\/php-fpm.pid/g' /opt/php8.2/etc/php-fpm.conf
+
+RUN php -v
+
+COPY ./php.ini /opt/php8.2/etc/
+COPY ./php_ext/.  /opt/php8.2/lib/php/extensions/no-debug-non-zts
+
+WORKDIR /var/www/
+
+COPY ./www.conf /opt/php8.2/etc/php-fpm.d/www.conf
+
+RUN chown -R www-data:www-data /var/www/
+RUN mkdir /var/log/php-fpm/
+
+RUN echo '#!/bin/bash' > /usr/local/bin/postinstall_script.sh && \
+    echo 'groupadd wwwdev' >> /usr/local/bin/postinstall_script.sh && \
+    echo 'groupmod -g $GROUP_ID wwwdev' >> /usr/local/bin/postinstall_script.sh && \
+    echo 'groupmod -g $USER_ID www-data' >> /usr/local/bin/postinstall_script.sh && \
+    echo 'usermod -a -G wwwdev www-data' >> /usr/local/bin/postinstall_script.sh && \
+    echo 'usermod -u $USER_ID www-data' >> /usr/local/bin/postinstall_script.sh && \
+    echo 'rm -- "$0"' >> /usr/local/bin/postinstall_script.sh && \
+    chmod +x /usr/local/bin/postinstall_script.sh
+
+EXPOSE 9000
+
+CMD ["/opt/php8.2/sbin/php-fpm", "-F"]

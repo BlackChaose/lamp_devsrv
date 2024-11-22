@@ -1,0 +1,35 @@
+FROM alpine:latest
+
+RUN apk add --no-cache busybox-extras netcat-openbsd socat vim msmtp shadow openrc
+
+RUN apk add --no-cache exim
+
+ARG USER_ID=1001
+ARG GROUP_ID=1001
+RUN addgroup -g $GROUP_ID www-dev && \
+    addgroup exim www-dev && \
+    addgroup mail www-dev && \
+    adduser -D -u $USER_ID -G www-dev www-dev
+
+RUN mkdir -p /var/log/exim-mails
+
+RUN echo "#!/bin/sh" > /usr/local/bin/setup.sh && \
+    echo 'rm -- "$0"' >> /usr/local/bin/setup.sh && \
+    echo 'usermod -u $USER_ID exim' >> /usr/local/bin/setup.sh && \
+    echo 'groupmod -g $GROUP_ID www-dev' >> /usr/local/bin/setup.sh && \
+    echo 'chown -R exim:www-dev /var/log/exim' >> /usr/local/bin/setup.sh && \
+    echo 'chmod -R 775 /var/log/exim' >> /usr/local/bin/setup.sh && \
+    echo "chown -R exim:www-dev /var/log/exim-mails" >> /usr/local/bin/setup.sh && \
+    echo "chmod -R 775 /var/log/exim-mails" >> /usr/local/bin/setup.sh && \
+    #echo 'rc-service exim restart' >> /usr/local/bin/setup.sh && \
+    chmod +x /usr/local/bin/setup.sh
+    
+COPY ./exim4/exim.conf /etc/exim/exim.conf
+
+COPY ./exim4/.msmtprc /.msmtprc
+RUN chmod 0600 /.msmtprc
+
+COPY ./exim4/virtual_aliases /etc/exim/virtual_aliases
+
+CMD ["exim", "-bdf", "-q30m"]
+#ENTRYPOINT ["/usr/local/bin/setup.sh"]

@@ -1,0 +1,117 @@
+FROM debian:bullseye-slim
+
+ARG USER_ID1=500
+ARG GROUP_ID1=500
+
+RUN groupadd -g ${GROUP_ID1} composeruser
+RUN useradd -m -u ${USER_ID1} -g ${GROUP_ID1} composeruser
+
+ARG GROUP_ID2=501
+
+RUN groupadd wwwdev
+RUN groupmod -g ${GROUP_ID2} wwwdev
+RUN usermod -a -G wwwdev composeruser
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    unzip \
+    vim\
+    lnav\
+    build-essential \
+    libcurl4-openssl-dev \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    libxml2-dev \
+    libicu-dev \
+    libzip-dev \
+    libbz2-dev \
+    libonig-dev \
+    libssl-dev \
+    libsqlite3-dev \
+    zlib1g-dev \
+    pkg-config \
+    libzip-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src
+RUN curl -sSL https://www.php.net/distributions/php-8.2.8.tar.bz2 -o php-8.2.8.tar.bz2 && \
+    tar -xjf php-8.2.8.tar.bz2 && \
+    cd php-8.2.8
+
+RUN cd php-8.2.8 && \
+    ./configure --prefix=/opt/php8.2 \
+                --with-config-file-path=/opt/php8.2 \
+                --with-libdir=/lib/x86_64-linux-gnu \
+                --enable-bcmath \
+                --enable-calendar \
+                --enable-fpm \
+                --enable-cgi \
+                --enable-cli \
+                --enable-ctype \
+                --enable-dom \
+                --enable-fileinfo \
+                --enable-filter \
+                --enable-gd \
+                --enable-hash \
+                --enable-intl \
+                --enable-json \
+                --enable-mbstring \
+                --enable-mysqlnd \
+                --enable-pdo \
+                --enable-phar \
+                --enable-posix \
+                --enable-session \
+                --enable-simplexml \
+                --enable-soap \
+                --enable-tokenizer \
+                --enable-xml \
+                --enable-xmlreader \
+                --enable-xmlwriter \
+		--enable-gd-native-ttf\
+                --with-curl \
+                --with-freetype \
+                --with-iconv \
+		--with-gd\
+                --with-jpeg \
+		--with-png\
+                --with-libxml \
+                --with-mysqli \
+                --with-openssl \
+                --with-pdo-mysql \
+                --with-pdo-sqlite \
+                --with-sqlite3 \
+                --with-zip \
+                --with-zlib \
+                --with-bz2 \
+    && make -j"$(nproc)" \
+    && make install
+
+RUN ln -s /opt/php8.2/bin/php /usr/bin/php \
+    && ln -s /opt/php8.2/bin/phpize /usr/bin/phpize \
+    && ln -s /opt/php8.2/bin/php-config /usr/bin/php-config \
+    && ln -s /opt/php8.2/sbin/php-fpm /usr/sbin/php-fpm
+
+COPY ./php.ini /opt/php8.2/etc/
+COPY ./php.ini /usr/local/etc/php/php.ini
+COPY ./php_ext/igbinary.so /opt/php8.2/lib/php/extensions/no-debug-non-zts-20220829/igbinary.so
+COPY ./php_ext/morpher.so /opt/php8.2/lib/php/extensions/no-debug-non-zts-20220829/morpher.so
+COPY ./php_ext/msgpack.so /opt/php8.2/lib/php/extensions/no-debug-non-zts-20220829/msgpack.so
+COPY ./php_ext/opcache.so /opt/php8.2/lib/php/extensions/no-debug-non-zts-20220829/opcache.so
+COPY ./php_ext/php_pdflib.so /opt/php8.2/lib/php/extensions/no-debug-non-zts-20220829/php_pdflib.so
+COPY ./php_ext/redis.so /opt/php8.2/lib/php/extensions/no-debug-non-zts-20220829/redis.so
+COPY ./php_ext/xdebug.so /opt/php8.2/lib/php/extensions/no-debug-non-zts-20220829/xdebug.so
+
+
+RUN curl -sS https://getcomposer.org/installer | php -- --version=2.6.5 --install-dir=/usr/local/bin --filename=composer
+
+RUN chmod +x /usr/local/bin/composer
+
+USER composeruser
+
+RUN php -v && composer -v
+
+WORKDIR /app
+
+CMD ["composer", "--help"]

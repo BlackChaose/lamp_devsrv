@@ -1,0 +1,175 @@
+services:
+  #MySQL контейнер
+  mysql:
+    build:
+      context: .
+      dockerfile: Dockerfile.mysql
+    image: devsrv-mysql:1.0.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+    networks:
+      - app-network
+    restart: always
+
+  #MySQL -test контейнер - тестовая БД для юнит тестов
+  mysql-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.mysql-test
+    image: devsrv-mysql-test:1.0.0
+    container_name: mysql-test
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD_TEST} 
+      MYSQL_DATABASE: ${MYSQL_DATABASE_TEST}
+      MYSQL_USER: ${MYSQL_USER_TEST}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD_TEST}
+    ports:
+      - "3310:3306"
+    volumes:
+      - ./mysql-test/data:/var/lib/mysql
+    networks:
+      - app-network
+    depends_on:
+      - mysql
+    restart: always
+
+  # Apache контейнер
+  apache:
+    build:
+      context: .
+      dockerfile: Dockerfile.apache
+    image: devsrv-apache:1.0.0
+    container_name: apache
+    user: root  
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ssl/private:/etc/ssl/private    
+      - ./apache/sites-available:/etc/apache2/sites-available 
+      - ./projects:/var/www 
+      - ./apache/init.sh:/init.sh 
+    environment:
+      - APACHE_DOCUMENT_ROOT=/var/www
+      - USER_ID=${USER_ID}
+      - GROUP_ID=${GROUP_ID}
+      - MYSQL_HOST=mysql                  
+      - MYSQL_PORT=3306                   
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - APACHE_RUN_DIR=/var/run/apache2
+      - APACHE_LOCK_DIR=/var/lock/apache2
+      - APACHE_PID_FILE=/var/run/apache2/apache2.pid
+      - APACHE_LOG_DIR=/var/log/apache2
+      - APACHE_RUN_USER=www-data          
+      - APACHE_RUN_GROUP=www-data   
+      - SERVER_NAME=apache.local
+    command: /bin/bash -c "[ -f /usr/local/bin/init.sh ] && /usr/local/bin/init.sh; exec apache2ctl -D FOREGROUNND & tail -f /dev/null" 
+    depends_on:
+      - php-fpm
+    networks:
+      - app-network
+    restart: always
+   
+  # PHP-FPM контейнер
+  php-fpm:
+    build:
+      context: .
+      dockerfile: Dockerfile.php-fpm
+    image: devsrv-phpfpm:1.0.0
+    container_name: phpfpm
+    volumes:
+      - ./projects:/var/www
+      - ./phpfpm/listen_mysql_forward.sh:/listen_mysql_forward.sh
+    networks:
+      - app-network
+    environment:
+      - USER_ID=${USER_ID}
+      - GROUP_ID=${GROUP_ID}
+    command: /bin/bash -c "[ -f /usr/local/bin/postinstall_script.sh ] && /usr/local/bin/postinstall_script.sh; exec /listen_mysql_forward.sh & /opt/php8.2/sbin/php-fpm -F"
+    depends_on:
+      - mysql
+    restart: always
+
+  # Node.js контейнер для фронтенд-разработки (npm, Webpack)
+  node:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    working_dir: /usr/src/app
+    image: devsrv-node:1.0.0
+    container_name: node
+    volumes:
+      - ./projects:/usr/src/app  #
+    networks:
+      - app-network
+    environment:
+      - USER_ID=${USER_ID}
+      - GROUP_ID=${GROUP_ID}
+    command: /bin/bash -c "tail -f /dev/null"  
+    restart: "no"
+
+  # Контейнер для Composer
+  composer:
+    build:
+      context: .
+      dockerfile: Dockerfile.composer
+    working_dir: /var/www
+    image: devsrv-composer:1.0.0
+    container_name: composer
+    volumes:
+      - ./projects:/var/www 
+    networks:
+      - app-network
+    environment:
+      - USER_ID=${USER_ID}
+      - GROUP_ID=${GROUP_ID}
+    command: /bin/bash -c "tail -f /dev/null"  
+    restart: "no"
+  
+  #Container for exim4
+  exim4:
+    build: 
+      context: .
+      dockerfile: Dockerfile.exim4
+    image: devsrv-exim4:1.0.0
+    container_name: exim-dev
+    hostname: ${MAIL_SERVER_HOSTNAME}
+    ports:
+      - "25:25" 
+      - "65:465"
+      - "587:587"
+    environment:
+      - MAIL_DOMAIN=${MAIL_DOMAIN}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - EXIM_CONFIG=${EXIM_CONFIG}
+      - EXIM_USER=${EXIM_USER}
+      - EXIM_GROUP=${EXIM_GROUP} 
+      - PRIMARY_HOSTNAME=${MAIL_SERVER_HOSTNAME}
+      - USER_ID=${USER_ID}
+      - GROUP_ID=${GROUP_ID}
+    volumes:
+      - ./exim4/data:/etc/exim4
+      - ./exim4/logs:/var/log/exim-mails
+    command: /bin/sh -c "[ -f /usr/local/bin/setup.sh ] && /usr/local/bin/setup.sh; exec exim -bdf -q30m & tail -f /dev/null"
+    networks:
+      - app-network
+    restart: always
+
+# Сеть для связи между контейнерами
+networks:
+  app-network:
+    driver: bridge
+
+# Объем для хранения данных MySQL
+volumes:
+  mysql-data:
+    driver: local
